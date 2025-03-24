@@ -84,15 +84,29 @@ func main() {
 		}
 		fmt.Printf("%+v\n", page)
 
+		// get record id
+		var recordID string
+		for _, record := range page.Result {
+			if record.Name == zoneName && record.Type == "AAAA" {
+				recordID = record.ID
+				break
+			}
+		}
+		if recordID == "" {
+			panic("No record found")
+		}
+
 		recordResponse, err := client.DNS.Records.Update(
 			context.TODO(),
-			zoneID,
+			recordID,
 			dns.RecordUpdateParams{
 				ZoneID: cloudflare.F(zoneID),
-				Record: dns.ARecordParam{
+				Record: dns.AAAARecordParam{
 					Content: cloudflare.F(ipv6),
 					Name:    cloudflare.F(zoneName),
-					Type:    cloudflare.F(dns.ARecordType(dns.AAAARecordTypeAAAA)),
+					Type:    cloudflare.F(dns.AAAARecordTypeAAAA),
+					Proxied: cloudflare.F(false),
+					TTL:     cloudflare.F(dns.TTL(1)),
 				},
 			},
 		)
