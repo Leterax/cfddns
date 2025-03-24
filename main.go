@@ -25,7 +25,6 @@ func main() {
 		token := c.Query("token")
 		email := c.Query("email")
 		zoneName := c.Query("zone")
-		recordName := c.Query("record")
 		ipv4 := c.Query("ipv4")
 		ipv6 := c.Query("ipv6")
 
@@ -33,7 +32,6 @@ func main() {
 		log.Printf("Token: %s", token)
 		log.Printf("Email: %s", email)
 		log.Printf("Zone: %s", zoneName)
-		log.Printf("Record: %s", recordName)
 		log.Printf("IPv4: %s", ipv4)
 		log.Printf("IPv6: %s", ipv6)
 
@@ -55,8 +53,8 @@ func main() {
 		}
 
 		client := cloudflare.NewClient(
-			option.WithAPIKey(token), // defaults to os.LookupEnv("CLOUDFLARE_API_KEY")
-			option.WithAPIEmail(email),               // defaults to os.LookupEnv("CLOUDFLARE_EMAIL")
+			option.WithAPIToken(token),
+			option.WithAPIEmail(email),
 		)
 
 		// list zones with name leoheller.de
@@ -76,7 +74,7 @@ func main() {
 
 		zoneID := zoneList.Result[0].ID
 		fmt.Printf("Zone ID: %s\n", zoneID)
-		
+
 		recordResponse, err := client.DNS.Records.Update(
 			context.TODO(),
 			zoneID,
@@ -84,7 +82,7 @@ func main() {
 				ZoneID: cloudflare.F(zoneID),
 				Record: dns.ARecordParam{
 					Content: cloudflare.F(ipv6),
-					Name:    cloudflare.F(recordName),
+					Name:    cloudflare.F(zoneName),
 					Type:    cloudflare.F(dns.ARecordType(dns.AAAARecordTypeAAAA)),
 				},
 			},
