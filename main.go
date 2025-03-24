@@ -1,11 +1,18 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/cloudflare/cloudflare-go/v4"
+	"github.com/cloudflare/cloudflare-go/v4/dns"
+	"github.com/cloudflare/cloudflare-go/v4/option"
+	"github.com/cloudflare/cloudflare-go/v4/zones"
 )
 
 func main() {
@@ -46,6 +53,46 @@ func main() {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing ipv4 or ipv6 URL parameter."})
 			return
 		}
+
+		client := cloudflare.NewClient(
+			option.WithAPIKey(token), // defaults to os.LookupEnv("CLOUDFLARE_API_KEY")
+			option.WithAPIEmail(email),               // defaults to os.LookupEnv("CLOUDFLARE_EMAIL")
+		)
+
+		// list zones with name leoheller.de
+		zoneListParams := zones.ZoneListParams{
+			Name: cloudflare.F(zoneName),
+		}
+
+		zoneList, err := client.Zones.List(context.TODO(), zoneListParams)
+		if err != nil {
+			panic(err.Error())
+		}
+		fmt.Printf("%+v\n", zoneList)
+
+		if len(zoneList.Result) == 0 {
+			panic("No zone found")
+		}
+
+		zoneID := zoneList.Result[0].ID
+		fmt.Printf("Zone ID: %s\n", zoneID)
+		
+		recordResponse, err := client.DNS.Records.Update(
+			context.TODO(),
+			zoneID,
+			dns.RecordUpdateParams{
+				ZoneID: cloudflare.F(zoneID),
+				Record: dns.ARecordParam{
+					Content: cloudflare.F(ipv6),
+					Name:    cloudflare.F(recordName),
+					Type:    cloudflare.F(dns.ARecordType(dns.AAAARecordTypeAAAA)),
+				},
+			},
+		)
+		if err != nil {
+			panic(err.Error())
+		}
+		fmt.Printf("%+v\n", recordResponse)
 
 		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Update successful."})
 	})
