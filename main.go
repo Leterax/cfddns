@@ -75,24 +75,56 @@ func main() {
 		zoneID := zoneList.Result[0].ID
 		fmt.Printf("Zone ID: %s\n", zoneID)
 
-		recordResponse, err := client.DNS.Records.Update(
-			context.TODO(),
-			zoneID,
-			dns.RecordUpdateParams{
-				ZoneID: cloudflare.F(zoneID),
-				Record: dns.ARecordParam{
-					Content: cloudflare.F(ipv6),
-					Name:    cloudflare.F(zoneName),
-					Type:    cloudflare.F(dns.ARecordType(dns.AAAARecordTypeAAAA)),
-				},
-			},
-		)
+		// First, try to list existing AAAA records
+		records, err := client.DNS.Records.List(context.TODO(), zoneID, dns.ListRecordParams{
+			Type: cloudflare.F(string(dns.AAAARecordTypeAAAA)),
+			Name: cloudflare.F(zoneName),
+		})
 		if err != nil {
-			panic(err.Error())
+			log.Printf("Error listing DNS records: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+			return
 		}
-		fmt.Printf("%+v\n", recordResponse)
 
-		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Update successful."})
+		if len(records.Result) == 0 {
+			// No existing record, create new one
+			_, err := client.DNS.Records.Create(
+				context.TODO(),
+				zoneID,
+				dns.CreateRecordParams{
+					Type:    cloudflare.F(string(dns.AAAARecordTypeAAAA)),
+					Name:    cloudflare.F(zoneName),
+					Content: cloudflare.F(ipv6),
+					TTL:     cloudflare.F(1), // Auto TTL
+				},
+			)
+			if err != nil {
+				log.Printf("Error creating DNS record: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+				return
+			}
+		} else {
+			// Update existing record
+			recordID := records.Result[0].ID
+			_, err := client.DNS.Records.Update(
+				context.TODO(),
+				zoneID,
+				dns.UpdateRecordParams{
+					ID:      recordID,
+					Type:    cloudflare.F(string(dns.AAAARecordTypeAAAA)),
+					Name:    cloudflare.F(zoneName),
+					Content: cloudflare.F(ipv6),
+					TTL:     cloudflare.F(1), // Auto TTL
+				},
+			)
+			if err != nil {
+				log.Printf("Error updating DNS record: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "DNS record updated successfully"})
 	})
 
 	r.GET("/healthz", func(c *gin.Context) {
