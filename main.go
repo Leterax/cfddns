@@ -23,7 +23,7 @@ func main() {
 		log.Printf("Request received: %v", c.Request)
 
 		token := c.Query("token")
-		email := c.Query("email")
+		email := "leojheller@gmail.com"
 		zoneName := c.Query("zone")
 		ipv4 := c.Query("ipv4")
 		ipv6 := c.Query("ipv6")
@@ -34,6 +34,7 @@ func main() {
 		log.Printf("Zone: %s", zoneName)
 		log.Printf("IPv4: %s", ipv4)
 		log.Printf("IPv6: %s", ipv6)
+
 
 		if token == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing token URL parameter."})
@@ -66,7 +67,7 @@ func main() {
 		if err != nil {
 			panic(err.Error())
 		}
-		fmt.Printf("%+v\n", zoneList)
+		//fmt.Printf("%+v\n", zoneList)
 
 		if len(zoneList.Result) == 0 {
 			panic("No zone found")
@@ -82,7 +83,7 @@ func main() {
 		if err != nil {
 			panic(err.Error())
 		}
-		fmt.Printf("%+v\n", page)
+		//fmt.Printf("%+v\n", page)
 
 		// get record id
 		var recordID string
@@ -95,8 +96,9 @@ func main() {
 		if recordID == "" {
 			panic("No record found")
 		}
+                fmt.Printf("Record ID: %s\n", recordID)
 
-		recordResponse, err := client.DNS.Records.Update(
+		_, err = client.DNS.Records.Update(
 			context.TODO(),
 			recordID,
 			dns.RecordUpdateParams{
@@ -113,8 +115,8 @@ func main() {
 		if err != nil {
 			panic(err.Error())
 		}
-		fmt.Printf("%+v\n", recordResponse)
-
+		//fmt.Printf("%+v\n", recordResponse)
+                fmt.Print("updated reccord successfully\n")
 		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Update successful."})
 	})
 
@@ -124,7 +126,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "5616"
 	}
 
 	if err := r.Run(":" + port); err != nil {
