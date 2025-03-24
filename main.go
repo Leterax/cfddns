@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -15,9 +20,55 @@ import (
 	"github.com/cloudflare/cloudflare-go/v4/zones"
 )
 
+func getPublicIPv6() (string, error) {
+	cmd := exec.Command("ip", "-6", "addr", "show", "scope", "global")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	//var currentIface string
+	reIPv6 := regexp.MustCompile(`inet6 ([a-f0-9:]+)/\d+`)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Capture interface name (e.g., "3: wlp1s0: <...>")
+		//if strings.Contains(line, ": ") && !strings.HasPrefix(line, " ") {
+		//      fields := strings.Split(line, ":")
+		//      if len(fields) > 1 {
+		//              currentIface = strings.TrimSpace(fields[1])
+		//      }
+		//}
+
+		// Skip deprecated
+		if strings.Contains(line, "deprecated") {
+			continue
+		}
+
+		// Find inet6 lines
+		if strings.Contains(line, "inet6") {
+			matches := reIPv6.FindStringSubmatch(line)
+			if len(matches) == 2 {
+				ip := matches[1]
+
+				// Skip ULA (fd..)
+				if strings.HasPrefix(ip, "fd") {
+					continue
+				}
+
+				fmt.Printf("%s\n", ip)
+				return ip, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no public IPv6 found")
+}
+
 func main() {
 
-        gin.SetMode(gin.ReleaseMode)
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
 	r.GET("/", func(c *gin.Context) {
@@ -27,31 +78,30 @@ func main() {
 		token := c.Query("token")
 		email := "leojheller@gmail.com"
 		zoneName := c.Query("zone")
-		ipv4 := c.Query("ipv4")
-		ipv6 := c.Query("ipv6")
+		// ipv4 := c.Query("ipv4")
+		// ipv6 := c.Query("ipv6")
 
 		// log request parameters
-		log.Printf("Token: %s", token)
-		log.Printf("Email: %s", email)
-		log.Printf("Zone: %s", zoneName)
-		log.Printf("IPv4: %s", ipv4)
-		log.Printf("IPv6: %s", ipv6)
-
+		// log.Printf("Token: %s", token)
+		// log.Printf("Email: %s", email)
+		// log.Printf("Zone: %s", zoneName)
+		// log.Printf("IPv4: %s", ipv4)
+		// log.Printf("IPv6: %s", ipv6)
 
 		if token == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing token URL parameter."})
 			return
 		}
-		if email == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing email URL parameter."})
-			return
-		}
+
 		if zoneName == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing zone URL parameter."})
 			return
 		}
-		if ipv4 == "" && ipv6 == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing ipv4 or ipv6 URL parameter."})
+
+
+		ipv6, err := getPublicIPv6()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Failed to get public IPv6."})
 			return
 		}
 
@@ -60,7 +110,7 @@ func main() {
 			option.WithAPIEmail(email),
 		)
 
-		// list zones with name leoheller.de
+		// list zones with name
 		zoneListParams := zones.ZoneListParams{
 			Name: cloudflare.F(zoneName),
 		}
@@ -85,7 +135,6 @@ func main() {
 		if err != nil {
 			panic(err.Error())
 		}
-		//fmt.Printf("%+v\n", page)
 
 		// get record id
 		var recordID string
@@ -98,7 +147,7 @@ func main() {
 		if recordID == "" {
 			panic("No record found")
 		}
-                fmt.Printf("Record ID: %s\n", recordID)
+		fmt.Printf("Record ID: %s\n", recordID)
 
 		_, err = client.DNS.Records.Update(
 			context.TODO(),
@@ -117,8 +166,8 @@ func main() {
 		if err != nil {
 			panic(err.Error())
 		}
-		//fmt.Printf("%+v\n", recordResponse)
-                fmt.Print("updated reccord successfully\n")
+
+		fmt.Print("updated reccord successfully\n")
 		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Update successful."})
 	})
 
